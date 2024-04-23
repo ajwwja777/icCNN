@@ -20,19 +20,19 @@ def get_generator_block(input_dim, output_dim):
     )
 
 class Generator(nn.Module):
-    def __init__(self, z_dim=128, im_dim=514*14*14, hidden_dim=128):
+    def __init__(self, z_dim=64, im_dim=(512, 14, 14), hidden_dim=128):
         super(Generator, self).__init__()
         self.gen = nn.Sequential(
             get_generator_block(z_dim, hidden_dim),
             get_generator_block(hidden_dim, hidden_dim * 2),
             get_generator_block(hidden_dim * 2, hidden_dim * 4),
             get_generator_block(hidden_dim * 4, hidden_dim * 8),
-            nn.Linear(hidden_dim * 8, im_dim),
+            nn.Linear(hidden_dim * 8, im_dim[0] * im_dim[1] * im_dim[2]),
             nn.Sigmoid()
         )
     
     def forward(self, noise):
-        return self.gen(noise)
+        return self.gen(noise).view(noise.shape[0], *im_dim)
 
 # 3 Class Disc
 def get_discriminator_block(input_dim, output_dim):
@@ -42,17 +42,17 @@ def get_discriminator_block(input_dim, output_dim):
     )
 
 class Discriminator(nn.Module):
-    def __init__(self, im_dim=514*14*14, hidden_dim=128):
+    def __init__(self, im_dim=(512, 14, 14), hidden_dim=128):
         super(Discriminator, self).__init__()
         self.disc = nn.Sequential(
-            get_discriminator_block(im_dim, hidden_dim * 4),
+            get_discriminator_block(np.prod(im_dim), hidden_dim * 4),
             get_discriminator_block(hidden_dim * 4, hidden_dim * 2),
             get_discriminator_block(hidden_dim * 2, hidden_dim),
             nn.Linear(hidden_dim, 1)
         )
 
     def forward(self, image):
-        return self.disc(image)
+        return self.disc(image.view(image.shape[0], -1))
 
 # 4 func getLoss
 def get_disc_loss(gen, disc, criterion, real, num_images, z_dim, device):
@@ -80,12 +80,15 @@ def get_gen_loss(gen, disc, criterion, num_images, z_dim, device):
 
 # 6 func getNoise
 def get_noise(n_samples, z_dim, device='cpu'):
-    return torch.randn(n_samples,z_dim,device=device)
+    return torch.randn(n_samples, z_dim, device=device)
 
 # 7 func visualize
-def visualize_tsne(all_feature):
+def visualize_tsne(all_feature, RFtype):
     # 平均池化降维，将特征向量从 (421, 512, 14, 14) 降维到 (421, 512)
-    all_feature = np.mean(all_feature, axis=(2, 3))
+    if RFtype == "real":
+        all_feature = np.mean(all_feature, axis=(0, 1))
+    else:
+        all_feature = np.mean(all_feature, axis=(2, 3))
 
     # 执行t-SNE降维
     tsne = TSNE(n_components=2, random_state=42)
@@ -95,11 +98,11 @@ def visualize_tsne(all_feature):
     plt.scatter(feature_tsne[:, 0], feature_tsne[:, 1], s=1)
     plt.xlabel('t-SNE Dimension 1')
     plt.ylabel('t-SNE Dimension 2')
-    plt.title('t-SNE Visualization of Pooled Feature Vectors')
+    plt.title(RFtype)
     plt.show()
 
 # 8 hyperperameter and so on
-z_dim = 64
+z_dim = 128
 batch_size = 128
 lr = 0.00001
 device = 'cpu'
@@ -181,10 +184,10 @@ for epoch in range(n_epochs):
             print(f"Step {cur_step}: Generator loss: {mean_generator_loss}, discriminator loss: {mean_discriminator_loss}")
             fake_noise = get_noise(cur_batch_size, z_dim, device=device)
             fake = gen(fake_noise)
-            fake_all_feature = fake.cpu().numpy()
-            real_all_feature = real.cpu().numpy()
-            visualize_tsne(fake_all_feature)
-            visualize_tsne(real_all_feature)
+            fake_all_feature = fake.detach().cpu().numpy()
+            real_all_feature = real.detach().cpu().numpy()
+            visualize_tsne(fake_all_feature, "fake")
+            visualize_tsne(real_all_feature, "real")
             mean_generator_loss = 0
             mean_discriminator_loss = 0
         cur_step += 1
