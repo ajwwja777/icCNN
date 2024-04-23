@@ -5,8 +5,10 @@ from tqdm.auto import tqdm
 from torchvision import transforms
 from torchvision.datasets import MNIST # Training dataset
 from torchvision.utils import make_grid
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.manifold import TSNE
 
 # 2 Class Gen
 def get_generator_block(input_dim, output_dim):
@@ -18,7 +20,7 @@ def get_generator_block(input_dim, output_dim):
     )
 
 class Generator(nn.Module):
-    def __init__(self, z_dim=10, im_dim=28*28, hidden_dim=128):
+    def __init__(self, z_dim=128, im_dim=514*14*14, hidden_dim=128):
         super(Generator, self).__init__()
         self.gen = nn.Sequential(
             get_generator_block(z_dim, hidden_dim),
@@ -40,7 +42,7 @@ def get_discriminator_block(input_dim, output_dim):
     )
 
 class Discriminator(nn.Module):
-    def __init__(self, im_dim=784, hidden_dim=128):
+    def __init__(self, im_dim=514*14*14, hidden_dim=128):
         super(Discriminator, self).__init__()
         self.disc = nn.Sequential(
             get_discriminator_block(im_dim, hidden_dim * 4),
@@ -81,14 +83,19 @@ def get_noise(n_samples, z_dim, device='cpu'):
     return torch.randn(n_samples,z_dim,device=device)
 
 # 7 func visualize
-def show_tensor_images(image_tensor, num_images=25, size=(1, 28, 28)):
-    '''
-    Function for visualizing images: Given a tensor of images, number of images, and
-    size per image, plots and prints the images in a uniform grid.
-    '''
-    image_unflat = image_tensor.detach().cpu().view(-1, *size)
-    image_grid = make_grid(image_unflat[:num_images], nrow=5)
-    plt.imshow(image_grid.permute(1, 2, 0).squeeze())
+def visualize_tsne(all_feature):
+    # 平均池化降维，将特征向量从 (421, 512, 14, 14) 降维到 (421, 512)
+    all_feature = np.mean(all_feature, axis=(2, 3))
+
+    # 执行t-SNE降维
+    tsne = TSNE(n_components=2, random_state=42)
+    feature_tsne = tsne.fit_transform(all_feature)
+
+    # Visualize t-SNE results
+    plt.scatter(feature_tsne[:, 0], feature_tsne[:, 1], s=1)
+    plt.xlabel('t-SNE Dimension 1')
+    plt.ylabel('t-SNE Dimension 2')
+    plt.title('t-SNE Visualization of Pooled Feature Vectors')
     plt.show()
 
 # 8 hyperperameter and so on
@@ -104,12 +111,34 @@ disc = Discriminator().to(device)
 disc_opt = torch.optim.Adam(disc.parameters(), lr=lr)
 
 # 9 dataset
-path = "../../../Data/"
-dataset = MNIST(root=path, transform=transforms.ToTensor(), download=False)
-dataloader = DataLoader(
-    dataset,
-    batch_size=batch_size,
-    shuffle=True)
+"""
+data = np.load("my_npz.npz")
+all_feature = data['f_map']
+print(all_feature.shape)
+(421, 512, 14, 14)
+
+特征向量的形状 (421, 512, 14, 14) 表示特征图数据具有四个维度,
+分别是 (样本数, 通道数, 高度, 宽度)。具体来说,
+样本数: 421, 表示你的数据集中有421个样本。
+通道数: 512, 表示每个特征图有512个通道。
+高度: 14, 表示每个特征图的高度为14个像素。
+宽度: 14, 表示每个特征图的宽度为14个像素。
+"""
+class FeatureDataset(Dataset):
+    def __init__(self, file_path):
+        self.data = np.load(file_path)['f_map']  # 加载 npz 文件的特征图数据
+
+    def __len__(self):
+        return len(self.data)  # 返回数据集的大小
+
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        return torch.tensor(sample, dtype=torch.float)  # 转换为 PyTorch 张量
+
+# 修改 DataLoader 的数据集为特征图的自定义 Dataset
+path = "../../Data/icCNN/16_vgg_bird_iccnn.npzAndOther3/vgg_voc_bird_lame1_c5_ep2499.npz"
+dataset = FeatureDataset(path)
+dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # 10 train
 n_epochs = 5
@@ -123,7 +152,7 @@ gen_loss = False
 for epoch in range(n_epochs):
   
     # Dataloader returns the batches
-    for real, _ in tqdm(dataloader):
+    for real in tqdm(dataloader):
         cur_batch_size = len(real)
 
         # Flatten the batch of real images from the dataset
@@ -152,8 +181,10 @@ for epoch in range(n_epochs):
             print(f"Step {cur_step}: Generator loss: {mean_generator_loss}, discriminator loss: {mean_discriminator_loss}")
             fake_noise = get_noise(cur_batch_size, z_dim, device=device)
             fake = gen(fake_noise)
-            show_tensor_images(fake)
-            show_tensor_images(real)
+            fake_all_feature = fake.cpu().numpy()
+            real_all_feature = real.cpu().numpy()
+            visualize_tsne(fake_all_feature)
+            visualize_tsne(real_all_feature)
             mean_generator_loss = 0
             mean_discriminator_loss = 0
         cur_step += 1
