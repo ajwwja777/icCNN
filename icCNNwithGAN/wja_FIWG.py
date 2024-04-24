@@ -113,6 +113,8 @@ gen_opt = torch.optim.Adam(gen.parameters(), lr=lr)
 disc = Discriminator().to(device) 
 disc_opt = torch.optim.Adam(disc.parameters(), lr=lr)
 
+im_dim=(512, 14, 14)
+
 # 9 dataset
 """
 data = np.load("my_npz.npz")
