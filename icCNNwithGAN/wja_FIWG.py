@@ -105,7 +105,7 @@ def visualize_tsne(all_feature, RFtype):
 
 # 8 hyperperameter and so on
 z_dim = 128
-batch_size = 421
+batch_size = 2546
 lr = 0.00001
 device = 'cpu'
 
@@ -149,7 +149,7 @@ path1 = '../../Data/iccnn/vgg16/16_vgg_voc_multi_iccnn_200.npz'#multi_iccnn
 path3 = '../../Data/iccnn/basic_fmap/vgg_download/vgg_voc_bird_lame1_c5_ep2499.npz'#bird_iccnn(论文用)
 # (2546, 2208, 7, 7)
 path4 = '../../Data/iccnn/densenet161/161_densenet_voc_multi_iccnn.npz'#multi_iccnn
-dataset = FeatureDataset(path3)
+dataset = FeatureDataset(path1)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # 10 train
