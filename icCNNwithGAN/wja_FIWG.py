@@ -85,8 +85,10 @@ def get_noise(n_samples, z_dim, device='cpu'):
 # 7 func visualize
 def visualize_tsne(all_feature, RFtype):
     # 平均池化降维，将特征向量从 (421, 512, 14, 14) 降维到 (421, 512)
+    # all_feature = np.mean(all_feature, axis=(2, 3))
     if RFtype == "real":
-        all_feature = np.mean(all_feature, axis=(0, 1))
+        # all_feature = np.mean(all_feature, axis=(0, 1))
+        pass
     else:
         all_feature = np.mean(all_feature, axis=(2, 3))
 
@@ -103,7 +105,7 @@ def visualize_tsne(all_feature, RFtype):
 
 # 8 hyperperameter and so on
 z_dim = 128
-batch_size = 128
+batch_size = 421
 lr = 0.00001
 device = 'cpu'
 
@@ -141,13 +143,18 @@ class FeatureDataset(Dataset):
         return torch.tensor(sample, dtype=torch.float)  # 转换为 PyTorch 张量
 
 # 修改 DataLoader 的数据集为特征图的自定义 Dataset
-path = "../../Data/icCNN/16_vgg_bird_iccnn.npzAndOther3/vgg_voc_bird_lame1_c5_ep2499.npz"
-dataset = FeatureDataset(path)
+# (2546, 512, 14, 14)
+path1 = '../../Data/iccnn/vgg16/16_vgg_voc_multi_iccnn_200.npz'#multi_iccnn
+# (421, 512, 14, 14)
+path3 = '../../Data/iccnn/basic_fmap/vgg_download/vgg_voc_bird_lame1_c5_ep2499.npz'#bird_iccnn(论文用)
+# (2546, 2208, 7, 7)
+path4 = '../../Data/iccnn/densenet161/161_densenet_voc_multi_iccnn.npz'#multi_iccnn
+dataset = FeatureDataset(path3)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # 10 train
-n_epochs = 5
-display_step = 500
+n_epochs = 1
+display_step = 1
 
 cur_step = 0
 mean_generator_loss = 0
