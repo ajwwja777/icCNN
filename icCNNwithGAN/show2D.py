@@ -13,7 +13,7 @@ ori_path1 = '../Data/iccnn/vgg16/16_vgg_voc_multi_ori.npz'#ori_iccnn
 ori_path4 = '../Data/iccnn/densenet161/161_densenet_voc_multi_ori.npz'#ori_iccnn
 
 # 加载特征向量
-data = np.load("../" + path3)
+data = np.load("../" + path1)
 all_feature = data['f_map']
 print(all_feature.shape)
 
