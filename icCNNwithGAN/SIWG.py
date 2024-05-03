@@ -43,9 +43,9 @@ class Generator(nn.Module):
         )
     
     def forward(self, noise, eval=False):
-        noise = self.gen(noise).view(noise.shape[0], *im_dim)
         if eval:
-            return noise
+            return self.gen(noise).view(noise.shape[0], *im_dim)
+        noise = self.gen(noise).view(noise.shape[0], *im_dim)
         corre_matrix = self.smg(noise)
         return noise, corre_matrix
     
@@ -72,7 +72,7 @@ class Discriminator(nn.Module):
 # 4 func getLoss
 def get_disc_loss(gen, disc, criterion, real, num_images, z_dim, device):
     fake_noise = get_noise(num_images, z_dim, device=device)
-    fake = gen(fake_noise)
+    fake = gen(fake_noise, eval=True)
 
     disc_fake_pred = disc(fake.detach())
     disc_fake_loss = criterion(disc_fake_pred, torch.zeros_like(disc_fake_pred))
@@ -86,7 +86,7 @@ def get_disc_loss(gen, disc, criterion, real, num_images, z_dim, device):
 # 5 func getLoss
 def get_gen_loss(gen, disc, criterion, num_images, z_dim, device):
     fake_noise = get_noise(num_images, z_dim, device=device)
-    fake = gen(fake_noise)
+    fake = gen(fake_noise, eval=True)
     
     disc_fake_pred = disc(fake)
     gen_loss = criterion(disc_fake_pred, torch.ones_like(disc_fake_pred))
@@ -198,14 +198,14 @@ cs_loss = Cluster_loss()
 
 for epoch in range(n_epochs): 
     if (epoch) % T==0 and epoch < STOP_CLUSTERING:
-        # with torch.no_grad():
+        with torch.no_grad():
             _, loss_mask_num, loss_mask_den = offline_spectral_cluster(gen, dataloader, None, batch_size)
     # Dataloader returns the batches
     for real in tqdm(dataloader):
         cur_batch_size = len(real)
         fake_noise = get_noise(batch_size, z_dim, device=device)
-        _, _, corre = gen(fake_noise, eval=False)
-        loss_ = cs_loss.update(corre, loss_mask_num, loss_mask_den)
+        _, corre = gen(fake_noise, eval=False)
+        loss_ = cs_loss.update(corre, loss_mask_num, loss_mask_den, labels = None)
 
         # Flatten the batch of real images from the dataset
         real = real.view(cur_batch_size, -1).to(device)
@@ -232,7 +232,7 @@ for epoch in range(n_epochs):
         if cur_step % display_step == 0:
             print(f"Step {cur_step}: Generator loss: {mean_generator_loss}, discriminator loss: {mean_discriminator_loss}")
             fake_noise = get_noise(cur_batch_size, z_dim, device=device)
-            fake = gen(fake_noise)
+            fake = gen(fake_noise, eval=True)
             fake_all_feature = fake.detach().cpu().numpy()
             real_all_feature = real.detach().cpu().numpy()
             visualize_tsne(fake_all_feature, "fake")
