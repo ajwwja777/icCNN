@@ -9,6 +9,16 @@ from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
+from Similar_Mask_Generate import SMGBlock
+from SpectralClustering import spectral_clustering
+from Tools import Cluster_loss
+
+CHANNEL_NUM = 512
+F_MAP_SIZE = 196
+center_num = 5
+T = 2
+STOP_CLUSTERING = 200
+lam = 0.1
 
 # 2 Class Gen
 def get_generator_block(input_dim, output_dim):
@@ -22,6 +32,7 @@ def get_generator_block(input_dim, output_dim):
 class Generator(nn.Module):
     def __init__(self, z_dim=64, im_dim=(512, 14, 14), hidden_dim=128):
         super(Generator, self).__init__()
+        self.smg = SMGBlock(channel_size = CHANNEL_NUM, f_map_size=F_MAP_SIZE)
         self.gen = nn.Sequential(
             get_generator_block(z_dim, hidden_dim),
             get_generator_block(hidden_dim, hidden_dim * 2),
@@ -31,9 +42,13 @@ class Generator(nn.Module):
             nn.Sigmoid()
         )
     
-    def forward(self, noise):
-        return self.gen(noise).view(noise.shape[0], *im_dim)
-
+    def forward(self, noise, eval=False):
+        noise = self.gen(noise).view(noise.shape[0], *im_dim)
+        if eval:
+            return noise
+        corre_matrix = self.smg(noise)
+        return noise, corre_matrix
+    
 # 3 Class Disc
 def get_discriminator_block(input_dim, output_dim):
     return nn.Sequential(
@@ -103,6 +118,26 @@ def visualize_tsne(all_feature, RFtype):
     plt.title(RFtype)
     plt.show()
 
+# func offline_spectral_cluster
+def offline_spectral_cluster(net, train_data, dataname, num_images):
+    net.eval()
+    f_map = []
+    for _ in train_data:
+        fake_noise = get_noise(num_images, z_dim, device=device)
+        cur_fmap = net(fake_noise,eval=True)
+        cur_fmap = cur_fmap.cpu().numpy()
+        f_map.append(cur_fmap)
+
+    f_map = np.concatenate(f_map,axis=0)
+    sample, channel,_,_ = f_map.shape
+    f_map = f_map.reshape((sample,channel,-1))
+    mean = np.mean(f_map,axis=0)
+    cov = np.mean(np.matmul(f_map-mean,np.transpose(f_map-mean,(0,2,1))),axis=0)
+    diag = np.diag(cov).reshape(channel,-1)
+    correlation = cov/(np.sqrt(np.matmul(diag,np.transpose(diag,(1,0))))+1e-5)+1
+    ground_true, loss_mask_num, loss_mask_den = spectral_clustering(correlation,n_cluster=center_num)
+    return ground_true, loss_mask_num, loss_mask_den
+
 # 8 hyperperameter and so on
 z_dim = 128
 batch_size = 128
@@ -114,6 +149,8 @@ gen = Generator(z_dim).to(device)
 gen_opt = torch.optim.Adam(gen.parameters(), lr=lr)
 disc = Discriminator().to(device) 
 disc_opt = torch.optim.Adam(disc.parameters(), lr=lr)
+# gen_scheduler = torch.optim.lr_scheduler.StepLR(gen_opt, step_size=125, gamma=0.6)
+# disc_scheduler = torch.optim.lr_scheduler.StepLR(disc_opt, step_size=125, gamma=0.6)
 
 im_dim=(512, 14, 14)
 
@@ -145,7 +182,7 @@ path1 = '../../Data/iccnn/vgg16/16_vgg_voc_multi_iccnn_200.npz'#multi_iccnn
 path3 = '../../Data/iccnn/basic_fmap/vgg_download/vgg_voc_bird_lame1_c5_ep2499.npz'#bird_iccnn(论文用)
 # (2546, 2208, 7, 7)
 path4 = '../../Data/iccnn/densenet161/161_densenet_voc_multi_iccnn.npz'#multi_iccnn
-dataset = FeatureDataset(path1)
+dataset = FeatureDataset(path3)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # 10 train
@@ -156,23 +193,30 @@ cur_step = 0
 mean_generator_loss = 0
 mean_discriminator_loss = 0
 gen_loss = False
+save_gt=[]
+cs_loss = Cluster_loss()
 
-for epoch in range(n_epochs):
-  
+for epoch in range(n_epochs): 
+    if (epoch) % T==0 and epoch < STOP_CLUSTERING:
+        # with torch.no_grad():
+            _, loss_mask_num, loss_mask_den = offline_spectral_cluster(gen, dataloader, None, batch_size)
     # Dataloader returns the batches
     for real in tqdm(dataloader):
         cur_batch_size = len(real)
+        fake_noise = get_noise(batch_size, z_dim, device=device)
+        _, _, corre = gen(fake_noise, eval=False)
+        loss_ = cs_loss.update(corre, loss_mask_num, loss_mask_den)
 
         # Flatten the batch of real images from the dataset
         real = real.view(cur_batch_size, -1).to(device)
-        disc_loss = get_disc_loss(gen, disc, criterion, real, cur_batch_size, z_dim, device)
+        disc_loss = get_disc_loss(gen, disc, criterion, real, cur_batch_size, z_dim, device) + lam * loss_
 
         ### Update discriminator ###
         disc_opt.zero_grad()
         disc_loss.backward(retain_graph=True)
         disc_opt.step()
 
-        gen_loss = get_gen_loss(gen, disc, criterion, cur_batch_size, z_dim, device)
+        gen_loss = get_gen_loss(gen, disc, criterion, cur_batch_size, z_dim, device) + lam * loss_
         gen_opt.zero_grad()
         gen_loss.backward()
         gen_opt.step()

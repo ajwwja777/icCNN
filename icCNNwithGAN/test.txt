@@ -1,0 +1,60 @@
+# func offline_spectral_cluster
+def offline_spectral_cluster(net, train_data, dataname, num_images):
+    net.eval()
+    f_map = []
+    for _ in train_data:
+        fake_noise = get_noise(num_images, z_dim, device=device)
+        fake_noise = fake_noise.cpu()
+        inputs = gen(fake_noise)
+        cur_fmap = net(inputs,eval=True)
+        cur_fmap = cur_fmap.cpu().numpy()
+
+        f_map.append(cur_fmap)
+
+    f_map = np.concatenate(f_map,axis=0)
+    sample, channel,_,_ = f_map.shape
+    f_map = f_map.reshape((sample,channel,-1))
+    mean = np.mean(f_map,axis=0)
+    cov = np.mean(np.matmul(f_map-mean,np.transpose(f_map-mean,(0,2,1))),axis=0)
+    diag = np.diag(cov).reshape(channel,-1)
+    correlation = cov/(np.sqrt(np.matmul(diag,np.transpose(diag,(1,0))))+1e-5)+1
+    ground_true, loss_mask_num, loss_mask_den = spectral_clustering(correlation,n_cluster=center_num)
+    return ground_true, loss_mask_num, loss_mask_den
+
+我改变了offline函数的输入，但是又遇到了一个error
+
+---------------------------------------------------------------------------
+AssertionError                            Traceback (most recent call last)
+Cell In[51], line 15
+     13 if (epoch) % T==0 and epoch < STOP_CLUSTERING:
+     14     with torch.no_grad():
+---> 15         _, loss_mask_num, loss_mask_den = offline_spectral_cluster(gen, dataloader, None, batch_size)
+     16 # Dataloader returns the batches
+     17 for real in tqdm(dataloader):
+
+Cell In[47], line 8
+      6 fake_noise = get_noise(num_images, z_dim, device=device)
+      7 fake_noise = fake_noise.cpu()
+----> 8 inputs = gen(fake_noise)
+      9 cur_fmap = net(inputs,eval=True)
+     10 cur_fmap = cur_fmap.cpu().numpy()
+
+File d:\Downloads\Anaconda\envs\py310_cpu\lib\site-packages\torch\nn\modules\module.py:1518, in Module._wrapped_call_impl(self, *args, **kwargs)
+   1516     return self._compiled_call_impl(*args, **kwargs)  # type: ignore[misc]
+   1517 else:
+-> 1518     return self._call_impl(*args, **kwargs)
+
+File d:\Downloads\Anaconda\envs\py310_cpu\lib\site-packages\torch\nn\modules\module.py:1527, in Module._call_impl(self, *args, **kwargs)
+   1522 # If we don't have any hooks, we want to skip the rest of the logic in
+   1523 # this function, and just call forward.
+   1524 if not (self._backward_hooks or self._backward_pre_hooks or self._forward_hooks or self._forward_pre_hooks
+...
+    291     raise AssertionError(
+    292         "libcudart functions unavailable. It looks like you have a broken build?"
+    293     )
+
+AssertionError: Torch not compiled with CUDA enabled
+
+可以看到我的device = 'cpu', 且有
+        fake_noise = get_noise(num_images, z_dim, device=device)
+        fake_noise = fake_noise.cpu()
