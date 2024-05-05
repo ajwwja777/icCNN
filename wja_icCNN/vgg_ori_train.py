@@ -14,7 +14,7 @@ import shutil
 import numpy as np
 from newPad2d import newPad2d
 
-IS_TRAIN = 0        # 0/1
+IS_TRAIN = 1        # 0/1
 IS_MULTI = 0
 LAYERS = '13'
 DATANAME = 'bird'
@@ -22,9 +22,9 @@ NUM_CLASSES = 6 if IS_MULTI else 2
 if DATANAME == 'celeb':
     NUM_CLASSES = 80
 cub_file = '../data/iccnn/dataset/frac_dataset'
-voc_file = '../data/iccnn/dataset/voc2010_crop'
-celeb_file = '../data/iccnn/dataset/CelebA/'
-log_path = '../data/iccnn/vgg/' # for model
+voc_file = '../../data/iccnn/dataset/voc2010_crop'
+celeb_file = '../../data/iccnn/dataset/CelebA/'
+log_path = '../../data/iccnn/vgg_test_with_no_gan_v1/' # for model
 save_path = '../data/iccnn/basic_fmap/vgg/'  # for get_feature
 acc_path = '../data/iccnn/basic_fmap/vgg/acc/'
 

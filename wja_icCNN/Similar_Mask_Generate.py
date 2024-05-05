@@ -29,7 +29,7 @@ class SMGBlock(nn.Module):
         f_mean = f_mean.view(1,channel,sz)
         f_mean_transposed = f_mean.permute(0,2,1)
         Local = torch.matmul(theta_x.permute(0, 2, 1)-f_mean, theta_x-f_mean_transposed)
-        diag = torch.eye(channel).view(-1,channel,channel).cuda()
+        diag = torch.eye(channel).view(-1,channel,channel).cpu()
         cov = torch.sum(Local*diag,dim=2).view(batch_size,channel,1)
         cov_transpose = cov.permute(0,2,1)
         norm = torch.sqrt(torch.matmul(cov,cov_transpose))

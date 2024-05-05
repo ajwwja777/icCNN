@@ -19,15 +19,15 @@ from SpectralClustering import spectral_clustering
 from utils.utils import Cluster_loss
 from newPad2d import newPad2d
 
-IS_TRAIN = 0        # 0/1
+IS_TRAIN = 1        # 0/1, 1 --> train, 0 --> get_feature
 LAYERS = '13'
 DATANAME = 'bird'
 NUM_CLASSES = 80 if DATANAME == 'celeb' else 2
 cub_file = '../data/iccnn/dataset/frac_dataset'
-voc_file = '../data/iccnn/dataset/voc2010_crop'
+voc_file = '../../data/iccnn/dataset/voc2010_crop'
 celeb_file = '../data/iccnn/dataset/CelebA/'
 
-log_path = '../data/iccnn/vgg_download/' # for model
+log_path = '../../data/iccnn/vgg_test_with_no_gan_v2/' # for model
 save_path = '../data/iccnn/basic_fmap/vgg_download_m2/'  # for get_feature
 acc_path = '../data/iccnn/basic_fmap/vgg_download_m2/acc/'
 
@@ -143,20 +143,20 @@ def vgg16(arch, cfg, num_class, device=None, pretrained=False, progress=True, **
         kwargs['cfg'] = cfg
     model = VGG(make_layers(cfgs[cfg], batch_norm=True), num_class, **kwargs)
     if pretrained:
-        if pretrain_model is None:
-            state_dict = load_state_dict_from_url(model_urls[arch],progress=progress)
-            pretrained_dict = {k: v for k, v in state_dict.items() if 'classifier' not in k}
-            model_dict = model.state_dict()
-            model_dict.update(pretrained_dict)
-            model.load_state_dict(model_dict)
-        else:
-            device = torch.device("cpu")
-            model = nn.DataParallel(model).to(device)
-            # pretrained_dict = torch.load(pretrain_model)
-            pretrained_dict = torch.load(pretrain_model, map_location=torch.device('cpu'))
-            if IS_TRAIN == 0:
-                pretrained_dict = {k[k.find('.')+1:]: v for k, v in pretrained_dict.items()}
-            model.load_state_dict(pretrained_dict)
+    # if pretrain_model is None:
+        state_dict = load_state_dict_from_url(model_urls[arch],progress=progress)
+        pretrained_dict = {k: v for k, v in state_dict.items() if 'classifier' not in k}
+        model_dict = model.state_dict()
+        model_dict.update(pretrained_dict)
+        model.load_state_dict(model_dict)
+    else:
+        device = torch.device("cpu")
+        model = nn.DataParallel(model).to(device)
+        # pretrained_dict = torch.load(pretrain_model)
+        pretrained_dict = torch.load(pretrain_model, map_location=torch.device('cpu'))
+        if IS_TRAIN == 0:
+            pretrained_dict = {k[k.find('.')+1:]: v for k, v in pretrained_dict.items()}
+        model.load_state_dict(pretrained_dict)
     if device is not None:
         model = nn.DataParallel(model).to(device)
     return model
@@ -258,10 +258,10 @@ def net_train():
         if epoch % 100 == 0 :
             torch.save(net.state_dict(), log_path+'model_%.3d.pth' % (epoch))
             np.savez(log_path+'loss_%.3d.npz'% (epoch), loss=np.array(save_total_loss), similarity_loss = np.array(save_similatiry_loss),gt=np.array(save_gt))
-        if epoch %1 == 0:
-            if acc > best_acc:
-                best_acc = acc
-                torch.save(net.state_dict(), log_path+'model_%.3d_%.4f.pth' % (epoch,best_acc))
+        # if epoch %1 == 0:
+        #     if acc > best_acc:
+        #         best_acc = acc
+        #         torch.save(net.state_dict(), log_path+'model_%.3d_%.4f.pth' % (epoch,best_acc))
     print('Finished Training')
     return net
 
@@ -332,7 +332,6 @@ def get_feature():
     f.write('%s\n' % dataset)
     f.write('acc:%f\n' % acc)
     print(acc)
-
     all_feature = []
     for batch_step, input_data in tqdm(enumerate(testset_feature,0),total=len(testset_feature),smoothing=0.9):
         inputs, labels = input_data

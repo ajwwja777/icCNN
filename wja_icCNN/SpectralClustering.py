@@ -26,4 +26,4 @@ def spectral_clustering(similarity_matrix,n_cluster=8):
         loss_mask_den.append(np.expand_dims(cur_mask_den,0))
     loss_mask_num = np.concatenate(loss_mask_num,axis=0)
     loss_mask_den = np.concatenate(loss_mask_den,axis=0)
-    return torch.from_numpy(ground_true_matrix).float().cuda(), torch.from_numpy(loss_mask_num).float().cuda(), torch.from_numpy(loss_mask_den).float().cuda() 
+    return torch.from_numpy(ground_true_matrix).float().cpu(), torch.from_numpy(loss_mask_num).float().cpu(), torch.from_numpy(loss_mask_den).float().cpu() 
